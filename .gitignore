@@ -1,0 +1,15 @@
+NWI_venv/
+.venv/
+__pycache__/
+.DS_Store
+dist/
+build/
+*.spec
+
+# 学習済みモデルはリポジトリに含めない
+*.onnx
+*.pt
+*.pth
+
+# 計測結果（ローカルのみ）
+Results/
