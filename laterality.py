@@ -8,6 +8,8 @@ import numpy as np
 import onnxruntime as ort
 from PIL import Image
 
+from algorithms import find_knee_split
+
 
 def preprocess(image_bgr):
     """Match Ultralytics classification: PIL resize, center crop, RGB / 255."""
@@ -24,20 +26,7 @@ def preprocess(image_bgr):
 
 def multiple_knees(mask):
     """Conservative screen for separated, similarly sized femoral components."""
-    if mask is None:
-        return False
-    count, _, stats, centers = cv2.connectedComponentsWithStats((mask > 0).astype(np.uint8), connectivity=8)
-    if count < 3:
-        return False
-    order = 1 + np.argsort(stats[1:, cv2.CC_STAT_AREA])[::-1]
-    largest = order[0]
-    for other in order[1:]:
-        if stats[other, cv2.CC_STAT_AREA] < stats[largest, cv2.CC_STAT_AREA] * 0.3:
-            continue
-        if (abs(centers[other, 0] - centers[largest, 0]) > mask.shape[1] * 0.25
-                and abs(centers[other, 1] - centers[largest, 1]) < mask.shape[0] * 0.2):
-            return True
-    return False
+    return find_knee_split(mask) is not None
 
 
 class LateralityModel:

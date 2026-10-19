@@ -6,7 +6,7 @@
   <title>NWI Semi-Auto — 半自動 NWI 計測</title>
   <meta name="description" content="膝関節正面X線画像で NWI を半自動計測する Web ツール。AI が大腿骨輪郭とベースラインを提示し、ノッチ幅は自分で引く。">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23007bff'/%3E%3Cpath d='M6 22h20' stroke='%23c800c8' stroke-width='3'/%3E%3Cpath d='M12 16h8' stroke='%23ff8c00' stroke-width='3'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=1.2.0">
 </head>
 <body>
   <div class="app">
@@ -42,6 +42,7 @@
 
       <div class="hud">
         <div class="nwi" id="nwi-value">NWI: --</div>
+        <div class="side" id="side-value" hidden></div>
         <div class="prompt" id="prompt" hidden></div>
       </div>
 
@@ -106,6 +107,7 @@
       <li><b>解析開始：</b>画面中央のボタンまたは Enter キーで AI 解析を開始します。</li>
       <li><b>計測：</b>自動生成された基線（紫）を元に、ノッチ幅（橙）を 2 回のクリックで引いてください。線は基線と平行に固定され、顆部幅（水色）と NWI は自動で計算されます。</li>
       <li><b>保存：</b>Space キーで結果を保存し、次へ進みます。結果は CSV でダウンロードできます。</li>
+      <li><b>両膝の画像：</b>両膝が写っている画像は AI が自動で左右に分け、リスト上で膝ごと（画面左・画面右）に計測します。</li>
     </ul>
     <p class="note">AI の輪郭が誤っている場合があります（例：大腿骨が十分に写っていない画像）。計測前に必ず目視で確認してください。</p>
     <p class="small muted">サンプル画像：Multi-Class Knee Osteoporosis X-Ray Dataset（Kaggle / Mohamed Gobara, Apache License 2.0）。研究・教育目的のデモです。医療機器ではなく、診断には使用できません。</p>
@@ -117,7 +119,7 @@
     <form method="dialog"><button class="btn primary wide" value="next" autofocus>次へ (Next)</button></form>
   </dialog>
 
-  <script src="/static/geometry.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/geometry.js?v=1.2.0"></script>
+  <script src="/static/app.js?v=1.2.0"></script>
 </body>
 </html>

@@ -13,9 +13,17 @@
     'Femur_L_x', 'Femur_L_y', 'Femur_R_x', 'Femur_R_y',
     'Notch_L_x', 'Notch_L_y', 'Notch_R_x', 'Notch_R_y',
     'Laterality_AI', 'Laterality_Confidence', 'Laterality_Status',
+    'Knee_Position',
   ];
+  // 両膝の画像は膝ごとに分けて計測する
+  const KNEE_NAMES = { screen_left: '画面左', screen_right: '画面右' };
+  const LATERALITY_NOTES = {
+    multiple_knees: ' — 両膝の可能性。片膝に切り抜いて再解析してください。',
+    inconsistent: ' — 両膝の左右の組み合わせが不自然です。画像の L/R 表示を確認してください。',
+  };
   const COLORS = {
     contour: 'rgba(0, 255, 0, 0.75)',
+    otherContour: 'rgba(0, 255, 0, 0.3)',
     baseline: 'rgb(200, 0, 200)',
     femur: 'rgb(0, 255, 255)',
     notch: 'rgb(255, 140, 0)',
@@ -30,6 +38,7 @@
     stage: $('stage'),
     canvas: $('canvas'),
     nwi: $('nwi-value'),
+    side: $('side-value'),
     prompt: $('prompt'),
     start: $('btn-start'),
     busy: $('busy'),
@@ -44,7 +53,7 @@
   };
 
   const state = {
-    items: [],          // { key, name, label, url, kind: 'sample' | 'upload', blob? }
+    items: [],          // { key, name, label, url, kind: 'sample' | 'upload', blob?, 両膝なら imageKey, position, region, layout }
     current: null,
     img: null,
     phase: 'IDLE',      // IDLE | PREVIEW | MEASURED
@@ -55,7 +64,7 @@
     temp: null,         // 引いている途中の線 { start, end }
     view: { s: 1, ox: 0, oy: 0 },
     pan: null,
-    cache: new Map(),   // 画像ごとの AI 結果 (このページを開いている間だけ)
+    cache: new Map(),   // 画像ごとの AI 結果 (このページを開いている間だけ)。キーは imageKey()
     session: loadSession(),
   };
 
@@ -96,9 +105,13 @@
     const side = data?.Laterality || state.analysis?.laterality;
     const label = document.getElementById('laterality-label');
     const name = side?.side === 'left' ? '左膝' : side?.side === 'right' ? '右膝' : '要確認';
-    label.textContent = side
-      ? `左右（AI候補）: ${name}${side.status === 'multiple_knees' ? ' — 両膝の可能性。片膝に切り抜いて再解析してください。' : ''}`
-      : '左右（AI候補）: 未判定';
+    const where = state.current?.position ? `（${KNEE_NAMES[state.current.position]}）` : '';
+    const text = side ? `左右（AI候補）: ${name}${where}` : '左右（AI候補）: 未判定';
+    label.textContent = text + (LATERALITY_NOTES[side?.status] || '');
+    // 画像の上 (NWI の下) にも出す
+    el.side.textContent = text;
+    el.side.hidden = !side;
+    el.side.classList.toggle('review', Boolean(side) && !side.side);
     el.dataBody.innerHTML = '';
     if (!data) return;
     const rows = [
@@ -155,6 +168,23 @@
     ctx.stroke();
   }
 
+  function strokeContour(ctx, c, color, width) {
+    if (!c || !c.length) return;
+    ctx.beginPath();
+    ctx.moveTo(c[0][0], c[0][1]);
+    for (let i = 1; i < c.length; i++) ctx.lineTo(c[i][0], c[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+
+  function otherKnees() {
+    if (!state.analysis || !state.current) return [];
+    const knees = state.cache.get(imageKey(state.current))?.knees || [];
+    return knees.filter((k) => k.position !== state.analysis.position);
+  }
+
   function render() {
     frame = 0;
     const ctx = el.canvas.getContext('2d');
@@ -172,16 +202,9 @@
     // 線の太さは画面上のピクセルで一定にする
     const px = (n) => n / s;
 
-    if (state.analysis && state.analysis.contour.length) {
-      const c = state.analysis.contour;
-      ctx.beginPath();
-      ctx.moveTo(c[0][0], c[0][1]);
-      for (let i = 1; i < c.length; i++) ctx.lineTo(c[i][0], c[i][1]);
-      ctx.closePath();
-      ctx.strokeStyle = COLORS.contour;
-      ctx.lineWidth = px(2);
-      ctx.stroke();
-    }
+    // 両膝の画像では、計測中でない膝の輪郭も薄く表示する
+    for (const k of otherKnees()) strokeContour(ctx, k.contour, COLORS.otherContour, px(2));
+    if (state.analysis) strokeContour(ctx, state.analysis.contour, COLORS.contour, px(2));
 
     const baseline = state.analysis
       ? state.analysis.baseline
@@ -279,6 +302,12 @@
       setNWI(saved.NWI);
       updateTable(saved);
       setPrompt('履歴データを表示中。修正可能です。', 'success');
+    } else if (item.position) {
+      // 両膝の画像を分けた項目は両膝として認識済みなので、プレビューを飛ばしてそのまま計測へ
+      state.phase = 'PREVIEW';
+      draw();
+      startAnalysis();
+      return;
     } else {
       // 履歴なし: プレビューのみ。AI はボタンを押してから
       state.phase = 'PREVIEW';
@@ -308,16 +337,46 @@
     return body;
   }
 
+  // AI の結果は画像単位。両膝の画像を分けた項目どうしは同じ結果を共有する
+  function imageKey(item) {
+    return item.imageKey || item.key;
+  }
+
+  // 両膝の画像を、リスト上で膝ごとの項目 (画面左・画面右) に置き換える
+  function splitItem(item, knees) {
+    const layout = knees.map((k) => ({ position: k.position, region: k.region }));
+    const parts = layout.map((k) => Object.assign({}, item, {
+      key: `${item.key}#${k.position}`,
+      label: `${item.label}（${KNEE_NAMES[k.position]}）`,
+      imageKey: item.key,
+      position: k.position,
+      region: k.region,
+      layout,
+    }));
+    state.items.splice(state.items.indexOf(item), 1, ...parts);
+    return parts;
+  }
+
+  // 両膝として保存済みの画像は、再読み込み後も膝ごとの項目で表示する
+  function restoreSplits() {
+    const res = results();
+    for (const item of state.items.slice()) {
+      if (item.position) continue;
+      const saved = Object.keys(KNEE_NAMES).map((p) => res[`${item.key}#${p}`]).find((d) => d && d.Knee_Layout);
+      if (saved) splitItem(item, saved.Knee_Layout);
+    }
+  }
+
   // AI 解析を実行して、ノッチ幅を引ける状態にする。成功したら true
   async function runAI() {
-    const item = state.current;
-    let analysis = state.cache.get(item.key);
-    if (!analysis) {
+    let item = state.current;
+    let response = state.cache.get(imageKey(item));
+    if (!response) {
       setPrompt('AI解析を実行中...', 'normal');
       setBusy(true);
       try {
-        analysis = await requestAnalysis(item);
-        state.cache.set(item.key, analysis);
+        response = await requestAnalysis(item);
+        state.cache.set(imageKey(item), response);
       } catch (e) {
         state.lineMode = false;
         updateTable(null);
@@ -327,12 +386,27 @@
         setBusy(false);
       }
     }
+    const knees = response.knees || [response];
+    let note = '';
+    if (knees.length > 1 && !item.position) {
+      item = splitItem(item, knees)[0];
+      state.current = item;
+      note = '両膝を検出しました（薄い緑がもう一方の膝）。';
+      renderList();
+    }
+    const analysis = item.position ? knees.find((k) => k.position === item.position) : knees[0];
+    if (!analysis) {
+      state.lineMode = false;
+      setPrompt('この膝の AI 結果が見つかりません。画像を選び直してください。', 'warning');
+      return false;
+    }
     state.analysis = analysis;
     state.data = null;
     updateTable(null);
     state.lineMode = true;
     setNWI(0);
-    setPrompt('AI解析完了。ノッチ幅（橙色）を引いてください。', 'success');
+    const where = item.position ? `（${KNEE_NAMES[item.position]}の膝）` : '';
+    setPrompt(`${note}AI解析完了${where}。ノッチ幅（橙色）を引いてください。`, 'success');
     updateCursor();
     draw();
     return true;
@@ -397,6 +471,8 @@
       ImageName: state.current.name,
       Timestamp: timestamp(),
       Mode: 'AI_SEMI',
+      Knee_Position: state.current.position || 'single',
+      Knee_Layout: state.current.layout,
     });
     results()[state.current.key] = record;
     state.data = record;
@@ -452,6 +528,7 @@
         d.Femur_Px.toFixed(2), d.Notch_Px.toFixed(2),
         ...d.P1, ...d.P2, ...d.Femur_L, ...d.Femur_R, ...d.Notch_L, ...d.Notch_R,
         d.Laterality?.side || '', d.Laterality?.confidence ?? '', d.Laterality?.status || '',
+        d.Knee_Position || 'single',
       ].join(','));
     }
     // Excel で文字化けしないよう BOM 付き UTF-8
@@ -616,6 +693,7 @@
       for (const s of samples) {
         state.items.push({ key: `sample:${s.name}`, name: s.name, label: s.name, url: s.url, kind: 'sample' });
       }
+      restoreSplits();
       renderList();
     } catch (e) {
       setPrompt('サンプル一覧を取得できませんでした。', 'warning');

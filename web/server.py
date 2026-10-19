@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 from algorithms import (  # noqa: E402
     AIModel,
     detect_baseline,
+    find_knee_split,
     full_postprocessing_pipeline,
 )
 
@@ -62,7 +63,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="NWI Semi-Auto",
     description="半自動 NWI 計測ツールの Web API。AI が大腿骨輪郭とベースラインを返す。",
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
 )
 
@@ -86,30 +87,60 @@ def analyse(img_bgr: np.ndarray) -> dict:
     if mask is None:
         raise HTTPException(status_code=500, detail="AI 推論に失敗しました。")
 
+    # 両膝が写っていれば 2 つの大腿骨の間で左右に分け、片膝ずつ処理する。
+    # 推論は画像全体の 1 回だけで、そのマスクを分けて使う。
+    h, w = img_bgr.shape[:2]
+    split = find_knee_split(mask)
+    regions = ([("single", 0, w)] if split is None
+               else [("screen_left", 0, split), ("screen_right", split, w)])
+    knees = [analyse_knee(img_bgr[:, x0:x1], mask[:, x0:x1], position, x0)
+             for position, x0, x1 in regions]
+
+    # 両膝の正面像では腓骨は両側とも外側にあるので、画面左の膝は right、
+    # 画面右の膝は left になるはず。それ以外の組み合わせは採用しない。
+    sides = [k["laterality"]["side"] for k in knees]
+    if len(knees) == 2 and None not in sides and sides != ["right", "left"]:
+        for k in knees:
+            k["laterality"] = {**k["laterality"], "side": None, "status": "inconsistent"}
+
+    return {
+        # 旧版の画面 (ブラウザのキャッシュ) 向けに、1 膝目は従来の形でも返す
+        "laterality": knees[0]["laterality"],
+        "contour": knees[0]["contour"],
+        "baseline": knees[0]["baseline"],
+        "knees": knees,
+        "width": w,
+        "height": h,
+        "elapsed_ms": int((time.perf_counter() - started) * 1000),
+    }
+
+
+KNEE_NAMES = {"screen_left": "画面左の膝", "screen_right": "画面右の膝"}
+
+
+def analyse_knee(img_bgr: np.ndarray, mask: np.ndarray, position: str, x0: int) -> dict:
+    """片膝ぶんの輪郭・ベースライン・左右候補。座標は元画像の座標に戻して返す。"""
+    prefix = f"{KNEE_NAMES[position]}: " if position in KNEE_NAMES else ""
     cnt_int, cnt_float = full_postprocessing_pipeline(mask)
     if cnt_int is None:
-        raise HTTPException(status_code=422, detail="AI解析に失敗しました（輪郭検出不可）。")
+        raise HTTPException(status_code=422, detail=f"{prefix}AI解析に失敗しました（輪郭検出不可）。")
 
     ai_res = detect_baseline(cnt_float)
     if not ai_res:
-        raise HTTPException(status_code=422, detail="AI解析に失敗しました（基線を算出できません）。")
+        raise HTTPException(status_code=422, detail=f"{prefix}AI解析に失敗しました（基線を算出できません）。")
 
-    laterality = get_laterality_model().predict(img_bgr, mask)
-    h, w = img_bgr.shape[:2]
-    contour = np.round(cnt_float[::CONTOUR_STRIDE], 2).tolist()
     return {
-        "laterality": laterality,
-        "width": w,
-        "height": h,
-        "contour": contour,
-        "baseline": {"P1": list(ai_res["P1"]), "P2": list(ai_res["P2"])},
-        "elapsed_ms": int((time.perf_counter() - started) * 1000),
+        "position": position,
+        "region": [x0, x0 + img_bgr.shape[1]],
+        "laterality": get_laterality_model().predict(img_bgr, mask),
+        "contour": np.round(cnt_float[::CONTOUR_STRIDE] + [x0, 0], 2).tolist(),
+        "baseline": {k: [float(ai_res[k][0]) + x0, float(ai_res[k][1])] for k in ("P1", "P2")},
     }
 
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"status": "ok", "version": "1.1.0", "model_loaded": get_model().seg_session is not None,
+    return {"status": "ok", "version": "1.2.0", "model_loaded": get_model().seg_session is not None,
             "laterality_loaded": get_laterality_model().session is not None}
 
 
@@ -143,7 +174,8 @@ async def analyze_upload(file: UploadFile = File(...)) -> dict:
 
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    # 更新後に古い画面が残らないよう、毎回サーバに確認させる (静的ファイルは ?v= で切り替える)
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

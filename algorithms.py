@@ -146,6 +146,36 @@ def full_postprocessing_pipeline(mask_np_uint8, smoothing=0.003):
         traceback.print_exc()
         return None, None
 
+# ==================== 双膝切分 ====================
+
+def find_knee_split(mask_np_uint8):
+    """
+    双膝同框时，返回把两侧股骨分开的竖直切分线 x 坐标；单膝返回 None。
+    判定为双膝: 存在面积 >= 最大连通域 30% 的连通域，且与最大连通域
+    水平相距 > 图宽 25%、垂直相距 < 图高 20%。
+    切分线取两侧股骨中心之间、股骨像素最少的列。
+    """
+    if mask_np_uint8 is None:
+        return None
+    count, labels, stats, centers = cv2.connectedComponentsWithStats(
+        (mask_np_uint8 > 0).astype(np.uint8), connectivity=8)
+    if count < 3:
+        return None
+    h, w = mask_np_uint8.shape[:2]
+    order = 1 + np.argsort(stats[1:, cv2.CC_STAT_AREA])[::-1]
+    largest = order[0]
+    for other in order[1:]:
+        if stats[other, cv2.CC_STAT_AREA] < stats[largest, cv2.CC_STAT_AREA] * 0.3:
+            continue
+        if (abs(centers[other, 0] - centers[largest, 0]) > w * 0.25
+                and abs(centers[other, 1] - centers[largest, 1]) < h * 0.2):
+            left, right = sorted((largest, other), key=lambda i: centers[i, 0])
+            lo, hi = int(centers[left, 0]), int(centers[right, 0])
+            per_column = np.isin(labels[:, lo:hi], (left, right)).sum(axis=0)
+            emptiest = np.flatnonzero(per_column == per_column.min())
+            return lo + int(emptiest[len(emptiest) // 2])
+    return None
+
 # ==================== 基线检测 ====================
 
 def detect_baseline(spline_contour_float):

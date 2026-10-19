@@ -130,6 +130,18 @@ html, body {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+.side {
+  margin-top: 8px;
+  background: rgba(30, 30, 30, .94);
+  border: 2px solid #888;
+  border-radius: 12px;
+  padding: 6px 16px;
+  color: #fff;
+  font-size: clamp(15px, 1.6vw, 20px);
+  font-weight: 700;
+  text-align: center;
+}
+.side.review { color: #ff6b6b; }
 .prompt {
   margin-top: 8px;
   padding: 10px;
@@ -260,6 +272,7 @@ kbd {
   .image-list { max-height: 220px; }
   .hud { top: 8px; left: 8px; width: calc(100% - 16px); }
   .nwi { font-size: 22px; padding: 6px 10px; }
+  .side { font-size: 13px; padding: 4px 10px; margin-top: 6px; }
   .prompt { font-size: 12px; padding: 6px 8px; margin-top: 6px; }
   .controls {
     top: auto;
