@@ -1,0 +1,72 @@
+[
+  {
+    "image": "Normal-1.jpg",
+    "side": "left",
+    "confidence": 1.0,
+    "status": "suggested",
+    "max_probability_difference": 6.938893903907228e-18
+  },
+  {
+    "image": "Normal-107.jpg",
+    "side": "right",
+    "confidence": 0.9999408721923828,
+    "status": "suggested",
+    "max_probability_difference": 1.014996087178588e-09
+  },
+  {
+    "image": "Normal-142.jpg",
+    "side": "left",
+    "confidence": 1.0,
+    "status": "suggested",
+    "max_probability_difference": 3.774758283725532e-15
+  },
+  {
+    "image": "Normal-177.jpg",
+    "side": "left",
+    "confidence": 0.9999997615814209,
+    "status": "suggested",
+    "max_probability_difference": 2.6147972675971687e-12
+  },
+  {
+    "image": "Normal-221.jpg",
+    "side": null,
+    "confidence": null,
+    "status": "multiple_knees",
+    "max_probability_difference": 6.05359673500061e-09
+  },
+  {
+    "image": "Normal-348.jpg",
+    "side": "left",
+    "confidence": 1.0,
+    "status": "suggested",
+    "max_probability_difference": 4.496403249731884e-15
+  },
+  {
+    "image": "Normal-383.jpg",
+    "side": "left",
+    "confidence": 1.0,
+    "status": "suggested",
+    "max_probability_difference": 3.7470027081099033e-16
+  },
+  {
+    "image": "Normal-420.jpg",
+    "side": "right",
+    "confidence": 0.9999872446060181,
+    "status": "suggested",
+    "max_probability_difference": 2.4556356947869062e-11
+  },
+  {
+    "image": "Normal-495.jpg",
+    "side": "left",
+    "confidence": 1.0,
+    "status": "suggested",
+    "max_probability_difference": 2.3592239273284576e-15
+  },
+  {
+    "image": "Normal-544.jpg",
+    "side": "left",
+    "confidence": 1.0,
+    "status": "suggested",
+    "max_probability_difference": 1.6653345369377348e-15
+  }
+]

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NWI Semi-Auto — 半自動 NWI 計測</title>
+  <meta name="description" content="膝関節正面X線画像で NWI を半自動計測する Web ツール。AI が大腿骨輪郭とベースラインを提示し、ノッチ幅は自分で引く。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23007bff'/%3E%3Cpath d='M6 22h20' stroke='%23c800c8' stroke-width='3'/%3E%3Cpath d='M12 16h8' stroke='%23ff8c00' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="panel left">
+      <header class="brand">
+        <h1>NWI Semi-Auto</h1>
+        <p>半自動 NWI 計測ツール</p>
+      </header>
+
+      <section>
+        <h2>計測コントロール</h2>
+        <button id="btn-new-round" class="btn danger" type="button">🔄 全件再計測 (New Round)</button>
+        <p class="muted" id="round-label">ラウンド v1</p>
+      </section>
+
+      <section>
+        <h2>画像アップロード</h2>
+        <label class="btn secondary file-btn">
+          📤 画像を選択 (JPEG / PNG)
+          <input type="file" id="file-input" accept="image/jpeg,image/png" hidden>
+        </label>
+        <p class="note">個人情報を含む画像はアップロードしないでください。画像は解析のためだけに送信され、サーバには保存されません。</p>
+      </section>
+
+      <section class="grow">
+        <h2>画像リスト (samples)</h2>
+        <ul id="image-list" class="image-list"></ul>
+      </section>
+    </aside>
+
+    <main class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+
+      <div class="hud">
+        <div class="nwi" id="nwi-value">NWI: --</div>
+        <div class="prompt" id="prompt" hidden></div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-save" class="btn success" type="button">💾 保存 (Space)</button>
+        <button id="btn-reset" class="btn gray" type="button">🛠 修正 (Reset)</button>
+        <div class="zoom">
+          <button id="btn-zoom-in" type="button" title="拡大">＋</button>
+          <button id="btn-zoom-out" type="button" title="縮小">－</button>
+          <button id="btn-fit" type="button" title="全体表示">⤢</button>
+        </div>
+      </div>
+
+      <button id="btn-start" class="start" type="button" hidden>▶ 計測開始 (Enter)</button>
+
+      <div class="busy" id="busy" hidden>
+        <div class="spinner"></div>
+        <p>AI解析を実行中...</p>
+        <p class="small">5〜10 秒ほどかかります</p>
+      </div>
+
+      <div class="empty" id="empty">左のリストから画像を選択してください</div>
+    </main>
+
+    <aside class="panel right">
+      <section>
+        <h2>今回の計測データ</h2>
+        <p id="laterality-label" aria-live="polite">左右（AI候補）: 未判定</p>
+        <p class="small muted">左右は AI の候補です。画像の L/R 表示と照合してください。</p>
+        <table class="data">
+          <thead><tr><th>項目</th><th>値</th></tr></thead>
+          <tbody id="data-body"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>保存済み</h2>
+        <p id="saved-count">0 件</p>
+        <button id="btn-csv" class="btn primary" type="button">⬇ CSV ダウンロード</button>
+      </section>
+
+      <section class="help">
+        <h2>操作</h2>
+        <ul>
+          <li><kbd>Enter</kbd> AI 解析開始</li>
+          <li>2 回クリック：ノッチ幅を引く</li>
+          <li><kbd>Space</kbd> 保存して次へ</li>
+          <li>ホイール：拡大・縮小</li>
+          <li>右ドラッグ / <kbd>Alt</kbd>+ドラッグ：移動</li>
+        </ul>
+        <button id="btn-help" class="btn link" type="button">操作ガイドを表示</button>
+        <p class="small"><a href="https://github.com/Aikoden/NWI-Semi-Auto" target="_blank" rel="noopener">GitHub</a></p>
+      </section>
+    </aside>
+  </div>
+
+  <dialog id="welcome" class="dialog">
+    <h2 class="dialog-title">NWI計測支援システム</h2>
+    <h3>操作ガイド</h3>
+    <ul>
+      <li><b>プレビュー：</b>左のリストから画像を選択すると、まずプレビューが表示されます。</li>
+      <li><b>解析開始：</b>画面中央のボタンまたは Enter キーで AI 解析を開始します。</li>
+      <li><b>計測：</b>自動生成された基線（紫）を元に、ノッチ幅（橙）を 2 回のクリックで引いてください。線は基線と平行に固定され、顆部幅（水色）と NWI は自動で計算されます。</li>
+      <li><b>保存：</b>Space キーで結果を保存し、次へ進みます。結果は CSV でダウンロードできます。</li>
+    </ul>
+    <p class="note">AI の輪郭が誤っている場合があります（例：大腿骨が十分に写っていない画像）。計測前に必ず目視で確認してください。</p>
+    <p class="small muted">サンプル画像：Multi-Class Knee Osteoporosis X-Ray Dataset（Kaggle / Mohamed Gobara, Apache License 2.0）。研究・教育目的のデモです。医療機器ではなく、診断には使用できません。</p>
+    <form method="dialog"><button class="btn success wide" autofocus>開始する</button></form>
+  </dialog>
+
+  <dialog id="saved-dialog" class="dialog small-dialog">
+    <p class="saved-msg">✅ 保存しました</p>
+    <form method="dialog"><button class="btn primary wide" value="next" autofocus>次へ (Next)</button></form>
+  </dialog>
+
+  <script src="/static/geometry.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

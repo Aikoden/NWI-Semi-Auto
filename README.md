@@ -64,6 +64,14 @@ python main.py
 
 **臨床画像は一切含まれていません。**
 
+## Web 版の左右候補
+
+Web 版は、腓骨の位置を基準に左右ラベルを付けて学習した既存の YOLO 分類器を ONNX で実行し、左膝／右膝の候補を表示します。腓骨の位置そのものを検出・描画する機能ではありません。低信頼度・両膝が疑われる画像では「要確認」を表示します。左右候補は NWI の幾何計算を変更しません。
+
+CSV には `Laterality_AI`, `Laterality_Confidence`, `Laterality_Status` を追加しています。信頼度は正解確率として校正した値ではありません。
+
+Web サーバは `web/server.py`、AWS 用更新イメージは `Dockerfile.lambda` です。既存の private ECR ベースイメージへのアクセスが必要です。分類重みは Git に含めず、`scripts/export_laterality.py` で手元の `yolobest.pt` から `models/laterality.onnx` を生成します（学習環境に torch / ultralytics / onnx が必要）。デスクトップ版には左右表示をまだ追加していません。
+
 ## 注意事項
 
 研究・教育目的のソフトウェアです。医療機器ではなく、診断に使用することはできません。

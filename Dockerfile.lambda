@@ -1,0 +1,6 @@
+# Preserve the exact deployed segmentation model and Lambda Web Adapter.
+FROM 469061454712.dkr.ecr.ap-northeast-1.amazonaws.com/nwi-semi-auto@sha256:6a085dedb86cca2288518a47dad92ebeb3c7d9af7a89d051e2527ed0a5f4ff1d
+RUN pip install --no-cache-dir Pillow==11.3.0
+COPY algorithms.py laterality.py /app/
+COPY models/laterality.onnx /app/models/laterality.onnx
+COPY web/ /app/web/
