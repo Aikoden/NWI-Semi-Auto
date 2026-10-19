@@ -63,10 +63,16 @@ def full_postprocessing_pipeline(mask_np_uint8, smoothing=0.003):
         if mask_np_uint8 is None or np.sum(mask_np_uint8) == 0:
             return None, None
 
-        mask = mask_np_uint8.astype(np.uint8)
+        mask = (mask_np_uint8 > 0).astype(np.uint8)
 
-        # 1.1 保留最大连通域并填充
-        contours_raw, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # 1.1 按实际预测像素数选择连通域，再填洞。
+        # 不能先比较外轮廓面积：少量误识别像素围成的胫骨空心圈
+        # 可能包围比真实股骨更大的区域（如 samples/Normal-107.jpg）。
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        if count < 2: return None, None
+        largest = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+        selected_mask = (labels == largest).astype(np.uint8)
+        contours_raw, _ = cv2.findContours(selected_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours_raw: return None, None
 
         max_cnt = max(contours_raw, key=cv2.contourArea)

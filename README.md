@@ -71,14 +71,3 @@ python main.py
 ## License
 
 MIT License（コード）。サンプル画像は元データセットのライセンス（Apache License 2.0）に従います。
-
----
-
-### English summary
-
-A semi-automatic tool for measuring the Notch Width Index (NWI) on anteroposterior knee radiographs.
-Live web demo (AWS Lambda): https://lydrem6fylfjzygah4n2tzb3qi0oaddm.lambda-url.ap-northeast-1.on.aws/
-The AI suggests the femoral contour and a baseline (purple); you draw the notch width yourself
-(orange), which is kept parallel to the baseline, and the bicondylar width (cyan) and NWI are
-computed automatically. Built with PySide6. Sample images are from a public dataset
-(Apache 2.0); no clinical images are included.
