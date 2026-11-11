@@ -1,6 +1,33 @@
-# Preserve the exact deployed segmentation model and Lambda Web Adapter.
-FROM 469061454712.dkr.ecr.ap-northeast-1.amazonaws.com/nwi-semi-auto@sha256:6a085dedb86cca2288518a47dad92ebeb3c7d9af7a89d051e2527ed0a5f4ff1d
-RUN pip install --no-cache-dir Pillow==11.3.0
-COPY algorithms.py laterality.py /app/
-COPY models/laterality.onnx /app/models/laterality.onnx
-COPY web/ /app/web/
+# Web 版（AWS Lambda 用）のコンテナイメージ
+#
+# ビルドの前に、学習済みモデルを models/ に置く（どちらも Git には含めない）:
+#   models/model_b5_384.onnx  大腿骨のセグメンテーション
+#   models/laterality.onnx    左右判定（scripts/export_laterality.py で生成）
+#
+# Lambda Web Adapter が、Lambda へのリクエストを uvicorn（FastAPI）に渡す。
+# Python と Adapter の版は、公開中のデモと同じものに固定している。
+
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0 AS lambda-adapter
+
+FROM python:3.11.16-slim-trixie
+COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    AWS_LWA_PORT=8080 \
+    AWS_LWA_READINESS_CHECK_PATH=/healthz \
+    AWS_LWA_ASYNC_INIT=true \
+    NWI_MODEL_PATH=/opt/model/model_b5_384.onnx
+
+WORKDIR /app
+COPY web/requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY models/model_b5_384.onnx /opt/model/model_b5_384.onnx
+COPY models/laterality.onnx models/laterality.onnx
+COPY algorithms.py laterality.py utils.py ./
+COPY web/ web/
+COPY samples/ samples/
+
+EXPOSE 8080
+CMD ["uvicorn", "web.server:app", "--host", "0.0.0.0", "--port", "8080"]

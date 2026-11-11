@@ -75,7 +75,23 @@ Web 版は、腓骨の位置を基準に左右ラベルを付けて学習した�
 
 CSV には `Laterality_AI`, `Laterality_Confidence`, `Laterality_Status`, `Knee_Position`（`single` / `screen_left` / `screen_right`）を追加しています。信頼度は正解確率として校正した値ではありません。
 
-Web サーバは `web/server.py`、AWS 用更新イメージは `Dockerfile.lambda` です。既存の private ECR ベースイメージへのアクセスが必要です。分類重みは Git に含めず、`scripts/export_laterality.py` で手元の `yolobest.pt` から `models/laterality.onnx` を生成します（学習環境に torch / ultralytics / onnx が必要）。デスクトップ版には左右表示をまだ追加していません。
+Web サーバは `web/server.py`、AWS 用のコンテナイメージは `Dockerfile.lambda` です（ビルド方法は次の「Web 版のビルド」）。分類重みは Git に含めず、`scripts/export_laterality.py` で手元の `yolobest.pt` から `models/laterality.onnx` を生成します（学習環境に torch / ultralytics / onnx が必要）。デスクトップ版には左右表示をまだ追加していません。
+
+## Web 版のビルド
+
+学習済みモデルはリポジトリに含めていないため、ビルドの前に次の 2 つを `models/` に置きます。
+
+| ファイル | 内容 |
+|---|---|
+| `models/model_b5_384.onnx` | 大腿骨のセグメンテーション（公開準備中） |
+| `models/laterality.onnx` | 左右判定（`scripts/export_laterality.py` で生成） |
+
+```bash
+docker build --platform linux/arm64 -f Dockerfile.lambda -t nwi-semi-auto .
+docker run --rm -p 8080:8080 nwi-semi-auto
+```
+
+`http://localhost:8080` を開くと Web 版を使えます。公開中のデモは、このイメージを AWS Lambda（arm64）で動かしています。Intel / AMD の PC で手元だけで動かすときは、`--platform linux/arm64` を外してもかまいません。
 
 ## 注意事項
 
