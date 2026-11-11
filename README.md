@@ -93,6 +93,21 @@ docker run --rm -p 8080:8080 nwi-semi-auto
 
 `http://localhost:8080` を開くと Web 版を使えます。公開中のデモは、このイメージを AWS Lambda（arm64）で動かしています。Intel / AMD の PC で手元だけで動かすときは、`--platform linux/arm64` を外してもかまいません。
 
+## テスト
+
+```bash
+pip install -r web/requirements.txt
+python -m unittest discover -s tests -v
+```
+
+学習済みモデルで `samples/` の画像を実際に解析する回帰テストは、環境変数 `NWI_MODEL_PATH` にモデルのパスを指定したときだけ実行し、指定しないときはスキップします。
+
+```bash
+NWI_MODEL_PATH=models/model_b5_384.onnx python -m unittest discover -s tests -v
+```
+
+GitHub Actions（`.github/workflows/test.yml`）は、push と pull request のたびにモデルなしでテストを実行します。
+
 ## 注意事項
 
 研究・教育目的のソフトウェアです。医療機器ではなく、診断に使用することはできません。
