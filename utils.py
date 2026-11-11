@@ -4,7 +4,7 @@ import re
 import csv
 import datetime
 
-# 全局配置
+# 全体の設定
 CSV_HEADERS = [
     "ImageName", "Timestamp", "Mode", "NWI",
     "Femur_Px", "Notch_Px",
@@ -20,26 +20,26 @@ def log(msg):
 
 def resource_path(relative_path):
     """
-    智能路径查找：
-    1. 优先检查 internal 目录 (专门针对 model.onnx)
-    2. 只有 internal 里没有，才去根目录找 (针对 samples)
+    ファイルのパスを探す:
+    1. まず internal フォルダを探す (model.onnx 用)
+    2. internal になければ、ルートのフォルダを探す (samples 用)
     """
     if getattr(sys, 'frozen', False):
-        # 【打包后】
+        # 【パッケージ化した実行ファイルのとき】
         base_path = os.path.dirname(sys.executable)
-        
-        # --- 路径分流逻辑 ---
-        
-        # 1. 尝试拼接 internal 路径
+
+        # --- パスの振り分け ---
+
+        # 1. internal フォルダのパスを試す
         internal_path = os.path.join(base_path, "internal", relative_path)
         if os.path.exists(internal_path):
             return internal_path
             
-        # 2. 如果 internal 里没有，就假设在 EXE 旁边
+        # 2. internal になければ、EXE と同じフォルダにあるとみなす
         return os.path.join(base_path, relative_path)
         
     else:
-        # 【开发环境】
+        # 【開発環境のとき】
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 class VersioningManager:
     def __init__(self, results_dir="Results"):

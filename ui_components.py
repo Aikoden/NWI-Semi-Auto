@@ -8,12 +8,12 @@ from PySide6.QtCore import Qt, QPointF, QLineF, Signal
 from algorithms import find_intersections
 
 # ==========================================
-# 1. 结果悬浮窗 (HUD - 左上角)
+# 1. 結果の表示 (HUD・左上)
 # ==========================================
 class ResultOverlay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents) # 鼠标事件穿透到画布
+        self.setAttribute(Qt.WA_TransparentForMouseEvents) # マウス操作は下のキャンバスに通す
         self.setAttribute(Qt.WA_TranslucentBackground) 
         self.setFixedWidth(360) 
         
@@ -31,7 +31,7 @@ class ResultOverlay(QWidget):
         res_layout = QVBoxLayout(self.result_frame)
         res_layout.setContentsMargins(20, 15, 20, 15)
         
-        # NWI 标签
+        # NWI の値
         self.lbl_nwi = QLabel("NWI: --")
         self.lbl_nwi.setStyleSheet("color: #ffaa00; font-weight: bold; font-size: 45px; background: transparent; border: none;")
         self.lbl_nwi.setAlignment(Qt.AlignCenter)
@@ -64,7 +64,7 @@ class ResultOverlay(QWidget):
         self.adjustSize()
         self.raise_()
 # ==========================================
-# 2. 操作按钮悬浮窗 (右上角)
+# 2. 操作ボタン (右上)
 # ==========================================
 class FloatingControlPanel(QFrame):
     save_requested = Signal()
@@ -94,19 +94,19 @@ class FloatingControlPanel(QFrame):
         layout.addWidget(self.btn_reset)
 
 # ==========================================
-# 3. 自定义测量线图形项
+# 3. 計測線の図形
 # ==========================================
 class EditableLine(QGraphicsLineItem):
     def __init__(self, x1, y1, x2, y2, color, width=2, line_type="Generic"):
         super().__init__(x1, y1, x2, y2)
         self.line_type = line_type
         pen = QPen(color, width)
-        pen.setCapStyle(Qt.RoundCap) # 圆角线头更美观
+        pen.setCapStyle(Qt.RoundCap) # 線の端を丸くする
         self.setPen(pen)
         self.setZValue(10)
 
 # ==========================================
-# 4. 核心画布类
+# 4. 画像キャンバス
 # ==========================================
 class ImageCanvas(QGraphicsView):
     data_updated = Signal(str, dict) # mode, data
@@ -116,19 +116,19 @@ class ImageCanvas(QGraphicsView):
         self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
         
-        # 内部状态
+        # 内部の状態
         self.curr_path = ""
         self.current_contour_item = None
         self.active_baseline = None
         self.current_line_type = "None" # Baseline, Notch, None
         
-        # 绘图辅助
+        # 描画中の線と画面移動
         self.temp_line = None
         self.start_pt = None
         self.is_panning = False
         self.last_pan_pos = QPointF()
 
-        # 画布 UI 设置
+        # キャンバスの表示設定
         self.setBackgroundBrush(QBrush(QColor(45, 45, 45)))
         self.setRenderHint(QPainter.Antialiasing)
         self.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -137,23 +137,23 @@ class ImageCanvas(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # 悬浮层
+        # キャンバスの上に重ねる表示
         self.overlay = ResultOverlay(self)
         self.controls = FloatingControlPanel(self)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # 确保 HUD 在左上角
+        # HUD を左上に置く
         self.overlay.move(15, 15)
-        # 确保控制面板在右上角
+        # 操作パネルを右上に置く
         self.controls.move(self.width() - self.controls.width() - 20, 20)
-        
-        # 强制刷新置顶状态
+
+        # 重ねた表示を最前面に戻す
         self.overlay.raise_()
         self.controls.raise_()
 
     # --------------------------
-    # 图像与 AI 渲染逻辑
+    # 画像と AI 解析結果の描画
     # --------------------------
     def load_image(self, path):
         self.curr_path = path
@@ -162,7 +162,7 @@ class ImageCanvas(QGraphicsView):
         self.current_contour_item = None
         
         try:
-            # 支持日语/中文等特殊路径的读取方式
+            # 日本語などを含むパスでも読める読み込み方
             file_bytes = np.fromfile(path, dtype=np.uint8)
             img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
             if img_bgr is None: return None
@@ -170,19 +170,19 @@ class ImageCanvas(QGraphicsView):
             h, w, ch = img_bgr.shape
             q_img = QImage(img_bgr.data, w, h, ch * w, QImage.Format_BGR888).copy()
             
-            # 添加图片到场景
+            # 画像をシーンに追加する
             pixmap_item = QGraphicsPixmapItem(QPixmap.fromImage(q_img))
             self.scene.addItem(pixmap_item)
             
-            # 设置场景范围与缩放
+            # シーンの範囲と表示倍率を設定する
             self.setSceneRect(0, 0, w, h)
             self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
 
-            # 加载图片后重置 HUD
+            # 画像を読み込んだら HUD を初期状態に戻す
             self.overlay.update_result(0.0)
             self.overlay.update_prompt("画像読み込み完了。解析を待機中...", "normal")
             
-            # 强制将悬浮层提到最前方
+            # 重ねた表示を最前面に出す
             self.overlay.raise_()
             self.controls.raise_()
             
@@ -192,47 +192,47 @@ class ImageCanvas(QGraphicsView):
             return None
 
     def draw_contour(self, pts):
-        """ 绘制 AI 生成的绿色轮廓线 """
+        """ AI が求めた輪郭を緑の線で描く """
         if pts is None: return
         poly = QPolygonF([QPointF(p[0], p[1]) for p in pts])
         self.current_contour_item = self.scene.addPolygon(poly, QPen(QColor(0, 255, 0, 180), 2))
         self.current_contour_item.setZValue(5)
 
     def setup_ai_baseline(self, ai_res):
-        """ 由 AI 设置基线，并准备接收用户画 Notch """
+        """ AI のベースラインを描き、ユーザーが Notch を引ける状態にする """
         p1 = QPointF(*ai_res['P1'])
         p2 = QPointF(*ai_res['P2'])
         self.active_baseline = self._add_line(p1, p2, "Baseline", QColor(200, 0, 200), width=3)
-        self.current_line_type = "Notch" # 自动进入诺契绘制模式
+        self.current_line_type = "Notch" # そのまま Notch を引くモードにする
 
     def restore_state(self, data):
-        """ 渲染 CSV 历史记录 """
-        self.clear_measurements() # 先清空
-        
+        """ CSV に保存済みの計測を描き直す """
+        self.clear_measurements() # 先に消す
+
         try:
-            # 1. 恢复基线 (必须赋值给 self.active_baseline，修正时要用)
+            # 1. ベースラインを戻す (修正のときに使うので、必ず self.active_baseline に入れる)
             p1 = QPointF(data['P1'][0], data['P1'][1])
             p2 = QPointF(data['P2'][0], data['P2'][1])
             self.active_baseline = self._add_line(p1, p2, "Baseline", QColor(200, 0, 200), width=3)
             
-            # 2. 恢复 Femur 延长线 (青色虚线)
+            # 2. Femur の延長線 (水色の破線) を戻す
             if 'Femur_L' in data and 'Femur_R' in data:
                 fl = QPointF(data['Femur_L'][0], data['Femur_L'][1])
                 fr = QPointF(data['Femur_R'][0], data['Femur_R'][1])
-                # 重新画出青色虚线
+                # 水色の破線を描き直す
                 pen = QPen(QColor(0, 255, 255), 3, Qt.DashLine)
                 f_item = self.scene.addLine(QLineF(fl, fr), pen)
                 f_item.setZValue(8)
-                # 注意：这里我们手动添加的 QGraphicsLineItem 需要标记类型，以便 Reset 时能被删掉
+                # 注意：ここで直接追加した QGraphicsLineItem にも種類を付けておく。Reset のときに消せるようにするため
                 f_item.line_type = "Femur" 
             
-            # 3. 恢复 Notch 线 (橙色)
+            # 3. Notch の線 (橙色) を戻す
             nl = QPointF(data['Notch_L'][0], data['Notch_L'][1])
             nr = QPointF(data['Notch_R'][0], data['Notch_R'][1])
             self._add_line(nl, nr, "Notch", QColor(255, 140, 0), width=4)
             
-            # 4. 更新 UI 状态
-            self.current_line_type = "None" # 历史记录模式下禁止乱画
+            # 4. UI の状態を更新する
+            self.current_line_type = "None" # 保存済みの表示中は線を引けないようにする
             self.overlay.update_result(data['NWI'])
             self.overlay.update_prompt("履歴データ。修正する場合は「Reset」を押してください。", "success")
             
@@ -240,41 +240,41 @@ class ImageCanvas(QGraphicsView):
             print(f"Restore Error: {e}")
 
     def reset_drawing_state(self):
-        # 1. 遍历场景，删除 Notch 和 Femur 类型的线
+        # 1. シーンから Notch と Femur の線を消す
         for item in list(self.scene.items()):
             ltype = getattr(item, 'line_type', None)
             if ltype in ["Notch", "Femur"]:
                 self.scene.removeItem(item)
         
-        # 2. 状态重置
+        # 2. 描画中の状態を戻す
         self.temp_line = None
         self.start_pt = None
         
-        # 3. 检查基线是否存在
+        # 3. ベースラインがあるか確かめる
         if self.active_baseline:
-            # 历史记录恢复状态（有基线，无轮廓）时，需要重新运行 AI 取得轮廓
+            # 保存済みの計測を表示している（ベースラインはあるが輪郭はない）ときは、AI を再実行して輪郭を求める
             if self.current_contour_item is None:
-                print("检测到历史数据模式（缺失轮廓），请求 AI 重新推理...")
+                print("保存済みデータの表示中（輪郭なし）のため、AI の再実行を依頼します...")
                 self.overlay.update_prompt("修正のため、AI解析を再実行しています...", "normal")
-                
-                # 通知 main.py 重新运行 AI
-                self.data_updated.emit("REQUEST_AI_RERUN", {}) 
-                return  # 退出函数，等待 AI 跑完自动会调用 setup_ai_baseline
 
-            # 确保轮廓是可见的
+                # main.py に AI の再実行を依頼する
+                self.data_updated.emit("REQUEST_AI_RERUN", {})
+                return  # ここで抜ける。AI 解析が終わると setup_ai_baseline が呼ばれる
+
+            # 輪郭を表示する
             self.current_contour_item.setVisible(True)
 
             self.current_line_type = "Notch"
             
-            # HUD 复位
+            # HUD を初期状態に戻す
             self.overlay.lbl_nwi.setText("NWI: --")
             self.overlay.update_prompt("修正モード：ノッチ幅（橙色）を引き直してください。", "instruction")
             
-            # 通知主窗口清空数据
+            # メインウィンドウに計測データを消すよう知らせる
             self.data_updated.emit("RESET", {}) 
             self.setCursor(Qt.CrossCursor)
         else:
-            # 没有基线
+            # ベースラインがない
             self.overlay.update_prompt("AI基線データがありません。画像を再読み込みしてください。", "warning")
     # --------------------------
     def wheelEvent(self, event):
@@ -316,7 +316,7 @@ class ImageCanvas(QGraphicsView):
             try:
                 curr = self.mapToScene(e.position().toPoint())
                 
-                # Notch 模式下自动锁定平行基线方向
+                # Notch モードでは、線をベースラインと平行に固定する
                 if self.current_line_type == "Notch" and self.active_baseline:
                     b = self.active_baseline.line()
                     vec = np.array([b.dx(), b.dy()])
@@ -330,12 +330,12 @@ class ImageCanvas(QGraphicsView):
                         self.temp_line.setLine(QLineF(self.start_pt, proj_pt))
                         return
 
-                # 普通模式更新线段
+                # それ以外のモードでは、マウスの位置まで線を伸ばす
                 self.temp_line.setLine(QLineF(self.start_pt, curr))
                 
             except RuntimeError:
-                # 如果捕获到 "Internal C++ object already deleted" 错误
-                # 说明线段已经被销毁了，我们将 Python 引用也置空，防止再次触发
+                # "Internal C++ object already deleted" のエラーは、線がすでに消されたことを示す。
+                # Python 側の参照も消して、同じエラーが繰り返し起きないようにする
                 self.temp_line = None
 
         super().mouseMoveEvent(e)
@@ -347,11 +347,11 @@ class ImageCanvas(QGraphicsView):
         super().mouseReleaseEvent(e)
 
     # --------------------------
-    # 数据计算与更新
+    # 計算とデータの更新
     # --------------------------
     def handle_draw_finish(self, end_pt): 
         if self.current_line_type == "Notch":
-            # 1. 获取基线方向 (由 AI 自动生成的紫色线提供角度)
+            # 1. ベースラインの向き (AI が描いた紫の線の角度) を求める
             if not self.active_baseline:
                 QMessageBox.warning(self, "Error", "AI基線が存在しません。")
                 return
@@ -360,43 +360,43 @@ class ImageCanvas(QGraphicsView):
             direction = np.array([b_line.dx(), b_line.dy()])
             unit_dir = direction / np.linalg.norm(direction)
             
-            # 2. 获取人工画的线端点
+            # 2. ユーザーが引いた線の両端
             n_p1 = np.array([self.start_pt.x(), self.start_pt.y()])
             n_p2 = np.array([end_pt.x(), end_pt.y()])
             n_len = np.linalg.norm(n_p1 - n_p2)
             mid_p = (n_p1 + n_p2) / 2.0
             
-            # 3. 寻找对应的 Femur 宽度 (延长线交点)
+            # 3. 対応する Femur の幅 (延長線と輪郭の交点) を求める
             if self.current_contour_item:
                 poly = self.current_contour_item.polygon()
                 cnt_pts = np.array([[p.x(), p.y()] for p in poly])
                 
-                # 向两侧寻找最外侧交点
+                # 両側へ伸ばして、いちばん外側の交点を探す
                 ints_p = find_intersections(mid_p, unit_dir, cnt_pts)
                 ints_n = find_intersections(mid_p, -unit_dir, cnt_pts)
                 
                 if ints_p and ints_n:
-                    # 获取最外圈的交点
+                    # いちばん外側の交点
                     fp_left = ints_n[-1][1]
                     fp_right = ints_p[-1][1]
                     f_len = np.linalg.norm(fp_right - fp_left)
                     
-                    # 绘制显眼的延长线 (分母)
+                    # 延長線 (NWI の分母) を目立つ色で描く
                     self._add_line(QPointF(*fp_left), QPointF(*fp_right), "Femur", QColor(0, 255, 255), width=3)
                 else:
-                    f_len = n_len # 回退方案
+                    f_len = n_len # 交点が見つからないときの代わり
                     fp_left, fp_right = n_p1, n_p2
             else:
                 f_len = n_len
                 fp_left, fp_right = n_p1, n_p2
 
-            # 4. 计算 NWI
+            # 4. NWI を計算する
             nwi = n_len / f_len if f_len > 0 else 0
-            
-            # 绘制人工确认的 Notch 线 (橙色)
+
+            # ユーザーが引いた Notch の線 (橙色) を描く
             self._add_line(self.start_pt, end_pt, "Notch", QColor(255, 140, 0), width=4)
             
-            # 5. 更新数据
+            # 5. データを更新する
             data = {
                 "NWI": nwi, "Femur_Px": f_len, "Notch_Px": n_len,
                 "P1": (b_line.p1().x(), b_line.p1().y()), 
@@ -418,9 +418,9 @@ class ImageCanvas(QGraphicsView):
         return item
 
     def clear_measurements(self, keep_baseline=False):
-        """ 只清理测量用的线条 (EditableLine)，绝对不要删除 current_contour_item """
+        """ 計測用の線 (EditableLine) だけを消す。current_contour_item は決して消さない """
         for item in list(self.scene.items()):
-            # 仅删除我们自定义的线条类
+            # 自作の線のクラスだけを消す
             if isinstance(item, EditableLine):
                 if keep_baseline and item.line_type == "Baseline":
                     continue

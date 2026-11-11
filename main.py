@@ -9,19 +9,19 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtCore import Qt, QTimer
 
-# 导入自定义组件与工具
+# 自作のコンポーネントとユーティリティ
 from ui_components import ImageCanvas
 from utils import resource_path, VersioningManager, CSV_HEADERS
 from algorithms import AIModel, full_postprocessing_pipeline, detect_baseline
 
 # ==========================================
-# 欢迎界面 (Japanese)
+# 起動時の案内画面
 # ==========================================
 class WelcomeDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("NWI解析ツール")
-        self.setFixedWidth(500)        # 只固定宽度，高度让它自己适应内容
+        self.setFixedWidth(500)        # 幅だけ固定し、高さは内容に合わせる
         self.setStyleSheet("background-color: white;")
         layout = QVBoxLayout(self)
         
@@ -50,7 +50,7 @@ class WelcomeDialog(QDialog):
         layout.addWidget(btn)
 
 # ==========================================
-# 保存成功弹窗
+# 保存完了ダイアログ
 # ==========================================
 class PostSaveDialog(QDialog):
     def __init__(self, parent=None):
@@ -70,7 +70,7 @@ class PostSaveDialog(QDialog):
         layout.addWidget(btn)
 
 # ==========================================
-# 主窗口 (修正版 - 完整集成)
+# メインウィンドウ
 # ==========================================
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -78,18 +78,18 @@ class MainWindow(QMainWindow):
         self.resize(1400, 900)
         self.setWindowTitle("NWI Analysis Workstation v2025 (AI Support Only)")
         
-        # 1. 初始化数据与模型
+        # 1. データとモデルの初期化
         self.vm = VersioningManager()
         self.session_data = self.vm.load_session_data()
         self.ai = AIModel() 
-        self.app_state = "IDLE" # 状态机：IDLE, PREVIEW, MEASURED
+        self.app_state = "IDLE" # 状態: IDLE, PREVIEW, MEASURED
 
-        # 2. UI 布局
+        # 2. UI のレイアウト
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
         
-        # --- 左侧：列表面板 ---
+        # --- 左：画像リスト ---
         left_panel = QFrame()
         left_panel.setFixedWidth(280)
         l_layout = QVBoxLayout(left_panel)
@@ -109,12 +109,12 @@ class MainWindow(QMainWindow):
         l_layout.addWidget(QLabel("<b>画像リスト (samples)</b>"))
         l_layout.addWidget(self.flist)
         
-        # --- 中间：核心画布 ---
+        # --- 中央：画像キャンバス ---
         self.canvas = ImageCanvas()
-        
-        # 新增：开始测量的大按钮 (悬浮在画布上)
+
+        # 計測開始の大きいボタン (キャンバスの上に重ねる)
         self.btn_start = QPushButton("▶ 計測開始 (Enter)", self.canvas)
-        self.btn_start.setGeometry(0, 0, 220, 60) # 位置在 on_file_click 动态计算
+        self.btn_start.setGeometry(0, 0, 220, 60) # 位置は on_file_click で計算する
         self.btn_start.setStyleSheet("""
             QPushButton { background-color: #28a745; color: white; font-size: 20px; font-weight: bold; border-radius: 10px; border: 2px solid white; }
             QPushButton:hover { background-color: #218838; }
@@ -122,12 +122,12 @@ class MainWindow(QMainWindow):
         self.btn_start.clicked.connect(self.on_start_clicked)
         self.btn_start.hide()
 
-        # 【重要：信号连接】
+        # 【重要：シグナルの接続】
         self.canvas.data_updated.connect(self.on_data_updated)
         self.canvas.controls.save_requested.connect(self.save_current_data)
         self.canvas.controls.reset_requested.connect(self.on_reset_clicked)
 
-        # --- 右侧：数据展示表 ---
+        # --- 右：計測データの表 ---
         right_panel = QFrame()
         right_panel.setFixedWidth(260)
         r_layout = QVBoxLayout(right_panel)
@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
         self.table = QTableWidget(0, 2)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setHorizontalHeaderLabels(["項目", "値"])
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers) # 禁止手动编辑
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers) # 表は手で編集させない
         
         r_layout.addWidget(QLabel("<b>今回の計測データ</b>"))
         r_layout.addWidget(self.table)
@@ -144,23 +144,23 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.canvas, stretch=1)
         main_layout.addWidget(right_panel)
         
-        # 变量初始化
+        # 変数の初期化
         self.curr_file_path = ""
         self.curr_data = None
-        self.current_img_bgr = None # 用于暂存图片供 AI 稍后处理
-        
-        # 自动加载列表
+        self.current_img_bgr = None # AI 解析まで画像を保持しておく
+
+        # 画像リストを読み込む
         self.refresh_file_list()
-        
-        # 欢迎弹窗
+
+        # 案内ダイアログ
         QTimer.singleShot(500, lambda: WelcomeDialog(self).exec())
 
     # --------------------------
-    # 核心逻辑
+    # 計測の処理
     # --------------------------
 
     def refresh_file_list(self):
-        """ 扫描 samples 文件夹并根据 CSV 状态渲染 """
+        """ samples フォルダの画像を並べ、CSV に保存済みの画像には印を付ける """
         self.flist.clear()
         samples_dir = resource_path("samples")
         # ====================================================
@@ -180,26 +180,26 @@ class MainWindow(QMainWindow):
                 self.flist.addItem(item)
 
     def on_file_click(self, item):
-        """ 阶段 1：点击列表，只加载图片预览，不跑 AI """
+        """ 段階 1：リストで選んだ画像をプレビューする（AI はまだ実行しない） """
         self.curr_file_path = item.data(Qt.UserRole)
         filename = os.path.basename(self.curr_file_path)
-        
-        # 1. 清理
+
+        # 1. 前の画像の状態を消す
         self.curr_data = None
         self.table.setRowCount(0)
         self.current_img_bgr = None
         
-        # 2. 加载图片
+        # 2. 画像を読み込む
         img_bgr = self.canvas.load_image(self.curr_file_path)
         if img_bgr is None:
             QMessageBox.critical(self, "Error", "画像の読み込みに失敗しました。")
             return
         
-        self.current_img_bgr = img_bgr # 暂存图片数据
+        self.current_img_bgr = img_bgr # 画像を保持しておく
 
-        # 3. 检查历史或进入预览
+        # 3. 保存済みなら前回の線を表示し、未計測ならプレビューにする
         if filename in self.session_data:
-            # 有历史：直接恢复
+            # 保存済み：前回の線を表示する
             data = self.session_data[filename]
             self.canvas.restore_state(data)
             self.update_table_display(data)
@@ -208,11 +208,11 @@ class MainWindow(QMainWindow):
             self.btn_start.hide()
             self.canvas.overlay.update_prompt("履歴データを表示中。修正可能です。", "success")
         else:
-            # 无历史：预览模式
+            # 未計測：プレビュー
             self.app_state = "PREVIEW"
             self.btn_start.show()
             self.btn_start.raise_()
-            # 按钮居中
+            # ボタンを中央に置く
             w, h = self.canvas.width(), self.canvas.height()
             if w > 0 and h > 0:
                 self.btn_start.move((w - 220)//2, (h - 60)//2)
@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
             self.canvas.overlay.update_prompt("プレビュー中。計測を開始するにはボタンを押してください。", "instruction")
 
     def on_start_clicked(self):
-        """ 阶段 2：用户确认后，运行 AI """
+        """ 段階 2：ボタンが押されたら AI 解析を実行する """
         if self.app_state != "PREVIEW" or self.current_img_bgr is None: return
         
         self.btn_start.hide()
@@ -229,26 +229,26 @@ class MainWindow(QMainWindow):
         if success:
             self.app_state = "MEASURED"
         else:
-            # 失败了保持在预览状态，允许重试或跳过
+            # 失敗したらプレビューのままにし、やり直しや次の画像へ進めるようにする
             self.app_state = "PREVIEW"
 
     def run_ai_logic(self, img_bgr):
-        """ AI 解析: 分割 -> 后处理 -> 基线检测 """
+        """ AI 解析: セグメンテーション -> 後処理 -> ベースライン検出 """
         self.canvas.overlay.update_prompt("AI解析を実行中...", "normal")
         QApplication.processEvents()
 
-        # 1. 预测股骨掩码
+        # 1. 大腿骨のマスクを推論する
         mask = self.ai.predict_mask(img_bgr)
         
         if mask is not None:
-            # 2. 后处理 (防粘连 + 样条拟合)
+            # 2. 後処理 (くっついた部分の切り離し + スプライン近似)
             cnt_int, cnt_float = full_postprocessing_pipeline(mask)
             
             if cnt_int is not None:
-                # 3. 绘制绿色轮廓
+                # 3. 輪郭を緑で描く
                 self.canvas.draw_contour(cnt_float)
                 
-                # 4. 寻找基线 (几何计算)
+                # 4. ベースラインを求める (幾何計算)
                 ai_res = detect_baseline(cnt_float)
                 
                 if ai_res:
@@ -257,41 +257,41 @@ class MainWindow(QMainWindow):
                     self.canvas.overlay.update_prompt("AI解析完了。ノッチ幅（橙色）を引いてください。", "success")
                     return True
 
-        # AI 失败
+        # AI 解析の失敗
         self.canvas.current_line_type = "None"
         self.canvas.overlay.update_prompt("AI解析に失敗しました（輪郭検出不可）。", "warning")
         self.table.setRowCount(0)
         return False
 
     def on_reset_clicked(self):
-        """ 修正按钮逻辑 """
+        """ 「修正」ボタンの処理 """
         self.curr_data = None
         self.table.setRowCount(0)
         self.canvas.reset_drawing_state()
-        self.app_state = "MEASURED" # 修正时依然保持测量状态
+        self.app_state = "MEASURED" # 修正中も計測済みの状態のままにする
 
     def on_data_updated(self, mode, data):
-        """ 画布数据回传处理 """
-        
-        # 1. 普通的重置信号 (当轮廓本来就存在时，比如刚测完马上点Reset)
+        """ キャンバスから届いたデータの処理 """
+
+        # 1. 通常のリセット (輪郭が表示されているとき。計測の直後に Reset を押した場合など)
         if mode == "RESET":
             self.curr_data = None
             self.table.setRowCount(0)
             
         # ==========================================================
-        # 【新增】 2. 处理“请求重新跑AI”的信号 (针对历史数据修正)
+        # 2. AI 解析の再実行の依頼 (保存済みデータを修正するとき)
         # ==========================================================
         elif mode == "REQUEST_AI_RERUN":
-            print("历史数据修正：正在重新运行 AI 解析...")
-            
-            # 确保当前有图片数据
+            print("保存済みデータの修正：AI 解析を再実行しています...")
+
+            # 画像が読み込まれているか確かめる
             if self.current_img_bgr is not None:
-                # 复用你在 on_start_clicked 里使用的那个 AI 逻辑函数
+                # on_start_clicked と同じ AI 解析の処理を使う
                 self.run_ai_logic(self.current_img_bgr)
             else:
                 QMessageBox.warning(self, "Warning", "画像データがありません。")
 
-        # 3. 正常的数据更新信号 (画线过程中传回的数据)
+        # 3. 通常のデータ更新 (線を引いたときに届くデータ)
         else:
             self.curr_data = data
             self.update_table_display(data)
@@ -309,7 +309,7 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 1, QTableWidgetItem(fmt.format(val)))
 
     def save_current_data(self):
-        """ 保存数据到 CSV """
+        """ 計測データを CSV に保存する """
         if not self.curr_data or self.curr_data.get('NWI', 0) == 0:
             QMessageBox.warning(self, "Warning", "計測データがありません。")
             return
@@ -359,16 +359,16 @@ class MainWindow(QMainWindow):
             self.app_state = "IDLE"
 
     def keyPressEvent(self, e):
-        # 快捷键支持
+        # キーボードショートカット
         if e.key() == Qt.Key_Return or e.key() == Qt.Key_Enter:
             if self.app_state == "PREVIEW":
-                self.on_start_clicked() # 回车开始 AI
+                self.on_start_clicked() # Enter で AI 解析を開始
         elif e.key() == Qt.Key_Space:
             if self.app_state == "MEASURED":
-                self.save_current_data() # 空格保存
+                self.save_current_data() # Space で保存
 
     def resizeEvent(self, event):
-        # 窗口大小改变时，保持开始按钮居中
+        # ウィンドウの大きさが変わっても、開始ボタンを中央に保つ
         super().resizeEvent(event)
         if self.btn_start.isVisible():
             w, h = self.canvas.width(), self.canvas.height()
