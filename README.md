@@ -54,7 +54,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-学習済みモデル（`model_b5_384.onnx`）は現在このリポジトリに含めていません（公開準備中）。
+学習済みモデル（`model_b5_384.onnx`）は非公開のため、このリポジトリには含めていません。
 モデルがない場合もアプリは起動しますが、AI 解析ステップは実行できません。
 
 ## サンプル画像
@@ -83,7 +83,7 @@ Web サーバは `web/server.py`、AWS 用のコンテナイメージは `Docker
 
 | ファイル | 内容 |
 |---|---|
-| `models/model_b5_384.onnx` | 大腿骨のセグメンテーション（公開準備中） |
+| `models/model_b5_384.onnx` | 大腿骨のセグメンテーション（非公開） |
 | `models/laterality.onnx` | 左右判定（`scripts/export_laterality.py` で生成） |
 
 ```bash
